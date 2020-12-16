@@ -2,7 +2,7 @@
     param(
         [Parameter()][ValidateSet('Windows','UserName','Certificate')] $ClientCredentialType,
         [Parameter()] $ADFSBaseUri,
-        [Parameter()] $AppliesTo,
+        [Parameter()] $RelayPartyIdentifier,
         [Parameter()] $Username,
         [Parameter()] $Password,
         [Parameter()] $Domain,
@@ -85,6 +85,7 @@
         $Binding = New-Object -TypeName System.ServiceModel.WS2007HttpBinding -ArgumentList ([System.ServiceModel.SecurityMode] $SecurityMode)
         $Binding.Security.Message.EstablishSecurityContext = $false
         $Binding.Security.Message.ClientCredentialType = $MessageCredential
+        $WSTrustChannelFactory.Credentials.ServiceCertificate.Authentication.CertificateValidationMode = X509CertificateValidationMode.None;
         $Binding.Security.Transport.ClientCredentialType = 'None'
             
     
@@ -104,7 +105,7 @@
     
     $RST = New-Object -TypeName System.IdentityModel.Protocols.WSTrust.RequestSecurityToken -Property @{
         RequestType   = [System.IdentityModel.Protocols.WSTrust.RequestTypes]::Issue
-        AppliesTo     = $AppliesTo
+        AppliesTo     = $RelayPartyIdentifier
         KeyType       = $KeyType
         TokenType     = if ($SAMLVersion -eq '1') {$TokenType.SAML11} else {$TokenType.SAML2}
     }
