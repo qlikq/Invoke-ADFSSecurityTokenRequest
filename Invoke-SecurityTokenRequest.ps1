@@ -29,13 +29,17 @@
         'UserName' {
             $MessageCredential = 'UserName'
             $ADFSTrustEndpoint = 'usernamemixed'
+            $SecurityMode = 'TransportWithMessageCredential'
             $ADFSBaseUri = $ADFSBaseUri.TrimEnd('/')
             $KeyType = [System.IdentityModel.Protocols.WSTrust.KeyTypes]::Bearer
         }
         'Certificate' {
             $MessageCredential = 'Certificate'
             $ADFSTrustEndpoint = 'certificatemixed'
-            $ADFSBaseUri = $ADFSBaseUri.TrimEnd('/')+':49443'
+            $SecurityMode = 'TransportWithMessageCredential'
+            #Unsure if cert auth port 49443 is needed
+            #$ADFSBaseUri = $ADFSBaseUri.TrimEnd('/')+':49443'
+            $ADFSBaseUri = $ADFSBaseUri.TrimEnd('/')
             $KeyType = [System.IdentityModel.Protocols.WSTrust.KeyTypes]::Symmetric
             $Cert = Get-ChildItem Cert:\CurrentUser\My\$CertThrumbprint
         }
@@ -48,9 +52,14 @@
     if ($ClientCredentialType -eq 'Certificate')
         {
         $Binding = New-Object -TypeName System.ServiceModel.WS2007HttpBinding -ArgumentList ([System.ServiceModel.SecurityMode] $SecurityMode)
+        $Binding.Security.Message.EstablishSecurityContext = $true
+        $Binding.Security.Message.ClientCredentialType = $MessageCredential
+        $Binding.Security.Transport.ClientCredentialType = 'None'          
+
         $WSTrustChannelFactory = New-Object -TypeName System.ServiceModel.Security.WSTrustChannelFactory -ArgumentList $Binding, $EP
         $WSTrustChannelFactory.TrustVersion = [System.ServiceModel.Security.TrustVersion]::WSTrust13
         $WSTrustChannelFactory.Credentials.ClientCertificate.Certificate = $Cert
+        $WSTrustChannelFactory.Credentials.SupportInteractive = $false
         $Channel = $WSTrustChannelFactory.CreateChannel()
         }
     else
