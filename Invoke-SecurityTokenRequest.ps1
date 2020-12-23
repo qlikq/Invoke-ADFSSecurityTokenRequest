@@ -1,8 +1,9 @@
 ﻿function Invoke-ADFSSecurityTokenRequest {
     param(
-        [Parameter()][ValidateSet('Windows','UserName','Certificate')] $ClientCredentialType,
-        [Parameter()] $ADFSBaseUri,
-        [Parameter()] $RelayPartyIdentifier,
+        [Parameter(Mandatory=$true)][ValidateSet('Windows','UserName','Certificate')] $ClientCredentialType,
+        [Parameter(Mandatory=$true)] $ADFSBaseUri,
+        [Parameter(Mandatory=$true)] $RelayPartyIdentifier,
+        #Username requires UPN format
         [Parameter()] $Username,
         [Parameter()] $Password,
         [Parameter()] $Domain,
@@ -12,6 +13,9 @@
         [Parameter()][Switch] $IgnoreCertificateErrors
     )
     
+    Add-Type -AssemblyName 'System.ServiceModel, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089'
+    Add-Type -AssemblyName 'System.IdentityModel, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089'
+
     $ADFSTrustPath = 'adfs/services/trust/13'
     $SecurityMode = 'TransportWithMessageCredential'
     
@@ -31,51 +35,22 @@
         'Certificate' {
             $MessageCredential = 'Certificate'
             $ADFSTrustEndpoint = 'certificatemixed'
-            $ADFSBaseUri = $ADFSBaseUri.TrimEnd('/')
+            $ADFSBaseUri = $ADFSBaseUri.TrimEnd('/')+':49443'
             $KeyType = [System.IdentityModel.Protocols.WSTrust.KeyTypes]::Symmetric
-            $Cert = [System.Security.Cryptography.X509Certificates.X509Certificate2[]](Get-ChildItem "Cert:\CurrentUser\My\$CertThrumbprint")
+            $Cert = Get-ChildItem Cert:\CurrentUser\My\$CertThrumbprint
         }
     
     }
     
-    Add-Type -AssemblyName 'System.ServiceModel, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089'
-    Add-Type -AssemblyName 'System.IdentityModel, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089'
     
     $EP = New-Object -TypeName System.ServiceModel.EndpointAddress -ArgumentList ('{0}/{1}/{2}' -f $ADFSBaseUri,$ADFSTrustPath,$ADFSTrustEndpoint)
     
     if ($ClientCredentialType -eq 'Certificate')
         {
-        <#$CSharpCode = @"
-    using System;
-    using System.ServiceModel.Security;
-    
-    namespace Cert
-    {
-        public class X509CertificateInitiatorClientCredential
-        {
-        cc.ClientCredentials.ClientCertificate.SetCertificate(
-        StoreLocation.CurrentUser,
-        StoreName.TrustedPeople,
-        X509FindType.FindByThumbprint,
-        "$CertThrumbprint");
-            }
-        }
-    }
-    "@
-    
-    Add-Type -TypeDefinition $CSharpCode -Language CSharp
-    
-    # creating objects of the class
-    # throws error because we didn't mention the namespace before class
-    [Program]::Main() 
-    
-     $Key = New-Object -TypeName Cert.X509CertificateInitiatorClientCredential # alternatively
-     #>
-        #$Credential = Get-SmartCardCred
         $Binding = New-Object -TypeName System.ServiceModel.WS2007HttpBinding -ArgumentList ([System.ServiceModel.SecurityMode] $SecurityMode)
         $WSTrustChannelFactory = New-Object -TypeName System.ServiceModel.Security.WSTrustChannelFactory -ArgumentList $Binding, $EP
         $WSTrustChannelFactory.TrustVersion = [System.ServiceModel.Security.TrustVersion]::WSTrust13
-        $WSTrustChannelFactory.Credentials.ClientCertificate.($Cert)
+        $WSTrustChannelFactory.Credentials.ClientCertificate.Certificate = $Cert
         $Channel = $WSTrustChannelFactory.CreateChannel()
         }
     else
@@ -85,9 +60,7 @@
         $Binding = New-Object -TypeName System.ServiceModel.WS2007HttpBinding -ArgumentList ([System.ServiceModel.SecurityMode] $SecurityMode)
         $Binding.Security.Message.EstablishSecurityContext = $false
         $Binding.Security.Message.ClientCredentialType = $MessageCredential
-        $WSTrustChannelFactory.Credentials.ServiceCertificate.Authentication.CertificateValidationMode = X509CertificateValidationMode.None;
-        $Binding.Security.Transport.ClientCredentialType = 'None'
-            
+        $Binding.Security.Transport.ClientCredentialType = 'None'          
     
         $WSTrustChannelFactory = New-Object -TypeName System.ServiceModel.Security.WSTrustChannelFactory -ArgumentList $Binding, $EP
         $WSTrustChannelFactory.TrustVersion = [System.ServiceModel.Security.TrustVersion]::WSTrust13
